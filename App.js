@@ -4,92 +4,281 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  FlatList,
   StyleSheet,
-  Keyboard
+  Keyboard,
+  Modal,
+  ImageBackground,
+  Image,
 } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Feather } from '@expo/vector-icons';
 
-export default class App extends Component {
+class App extends Component {
   constructor(props) {
     super(props);
     this.state = {
-      input: '',
-      nome: ''
+      tarefa: '',
+      lista: [],
+      editandoId: null,
+      tarefaEditada: '',
+      modalVisible: false
     };
-
-    this.gravaNome = this.gravaNome.bind(this);
   }
 
-  async componentDidMount() {
-    try {
-      const nomeSalvo = await AsyncStorage.getItem('nome');
-      if (nomeSalvo !== null) {
-        this.setState({ nome: nomeSalvo });
-      }
-    } catch (error) {
-      console.error('Erro ao recuperar nome: ', error);
+  adicionarTarefa = () => {
+    if (this.state.tarefa.trim() !== '') {
+      const novaTarefa = {
+        id: Date.now().toString(),
+        texto: this.state.tarefa,
+        concluida: false
+      };
+      this.setState(prevState => ({
+        lista: [...prevState.lista, novaTarefa],
+        tarefa: ''
+      }));
+      Keyboard.dismiss();
     }
-  }
+  };
 
-  async componentDidUpdate(_, prevState) {
-    if (prevState.nome !== this.state.nome) {
-      await AsyncStorage.setItem('nome', this.state.nome);
-    }
-  }
+  alternarConclusao = (id) => {
+    const novaLista = this.state.lista.map(item =>
+      item.id === id ? { ...item, concluida: !item.concluida } : item
+    );
+    this.setState({ lista: novaLista });
+  };
 
-  gravaNome() {
-    this.setState({ nome: this.state.input });
-    Keyboard.dismiss();
-  }
+  excluirTarefa = (id) => {
+    const novaLista = this.state.lista.filter(item => item.id !== id);
+    this.setState({ lista: novaLista });
+  };
+
+  abrirModalEdicao = (item) => {
+    this.setState({
+      editandoId: item.id,
+      tarefaEditada: item.texto,
+      modalVisible: true
+    });
+  };
+
+  salvarEdicao = () => {
+    const novaLista = this.state.lista.map(item =>
+      item.id === this.state.editandoId ? { ...item, texto: this.state.tarefaEditada } : item
+    );
+    this.setState({
+      lista: novaLista,
+      modalVisible: false,
+      editandoId: null,
+      tarefaEditada: ''
+    });
+  };
+
+  renderItem = ({ item }) => (
+    <View style={styles.itemContainer}>
+      <TouchableOpacity onPress={() => this.alternarConclusao(item.id)}>
+        <Image
+          source={require('./assets/sharingan.png')}
+          style={[
+            styles.sharinganIcon,
+            item.concluida && { opacity: 1 },
+            !item.concluida && { tintColor: '#555', opacity: 0.5 },
+          ]}
+        />
+      </TouchableOpacity>
+
+      <Text style={[styles.itemTexto, item.concluida && styles.itemConcluida]}>
+        {item.texto}
+      </Text>
+
+      <TouchableOpacity onPress={() => this.abrirModalEdicao(item)}>
+        <Feather name="edit" size={22} color="#FFA500" style={styles.icon} />
+      </TouchableOpacity>
+
+      <TouchableOpacity onPress={() => this.excluirTarefa(item.id)}>
+        <Feather name="trash-2" size={22} color="#FF4444" style={styles.icon} />
+      </TouchableOpacity>
+    </View>
+  );
 
   render() {
     return (
-      <View style={styles.container}>
-        <View style={styles.viewInput}>
-          <TextInput
-            style={styles.input}
-            value={this.state.input}
-            onChangeText={(text) => this.setState({ input: text })}
-            placeholder="Digite seu nome"
-          />
-          <TouchableOpacity style={styles.botao} onPress={this.gravaNome}>
-            <Text style={{ color: '#FFF', fontSize: 20 }}>+</Text>
-          </TouchableOpacity>
-        </View>
+      <ImageBackground
+        source={require('./assets/background.png')}
+        style={styles.background}
+        resizeMode="cover"
+      >
+        <View style={styles.overlay}>
+          <View style={styles.barraNinja}>
+            <Text style={styles.ninjaTitle}>Aldeia da Folha 🌿</Text>
+          </View>
 
-        <Text style={styles.nome}>{this.state.nome}</Text>
-      </View>
+          <Text style={styles.title}>Lista Ninja 🥊</Text>
+
+          <View style={styles.inputArea}>
+            <TextInput
+              style={styles.input}
+              value={this.state.tarefa}
+              onChangeText={(text) => this.setState({ tarefa: text })}
+              placeholder="Digite sua missão ninja"
+              placeholderTextColor="#aaa"
+            />
+            <TouchableOpacity style={styles.botao} onPress={this.adicionarTarefa}>
+              <Text style={styles.botaoTexto}>Adicionar</Text>
+            </TouchableOpacity>
+          </View>
+
+          <FlatList
+            data={this.state.lista}
+            keyExtractor={(item) => item.id}
+            renderItem={this.renderItem}
+            style={styles.lista}
+          />
+
+          <Modal visible={this.state.modalVisible} transparent animationType="slide">
+            <View style={styles.modalContainer}>
+              <View style={styles.modalContent}>
+                <Text style={styles.modalTitle}>Editar missão</Text>
+                <TextInput
+                  style={styles.modalInput}
+                  value={this.state.tarefaEditada}
+                  onChangeText={(text) => this.setState({ tarefaEditada: text })}
+                />
+                <TouchableOpacity style={styles.salvarBotao} onPress={this.salvarEdicao}>
+                  <Text style={styles.salvarTexto}>Salvar</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </Modal>
+        </View>
+      </ImageBackground>
     );
   }
 }
 
 const styles = StyleSheet.create({
-  container: {
+  background: {
     flex: 1,
-    marginTop: 20,
-    alignItems: 'center',
   },
-  viewInput: {
-    flexDirection: 'row',
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    padding: 20,
+    paddingTop: 50,
+  },
+  barraNinja: {
+    backgroundColor: '#333',
+    padding: 15,
     alignItems: 'center',
+    borderRadius: 8,
+    marginBottom: 20,
+    borderWidth: 2,
+    borderColor: '#FF4444',
+  },
+  ninjaTitle: {
+    fontSize: 18,
+    color: '#fff',
+    fontWeight: 'bold',
+    fontFamily: 'monospace',
+  },
+  title: {
+    fontSize: 26,
+    fontWeight: 'bold',
+    color: '#FFA500',
+    marginBottom: 20,
+    textAlign: 'center',
+    fontFamily: 'monospace'
+  },
+  inputArea: {
+    flexDirection: 'row',
+    borderWidth: 1,
+    borderColor: '#FFA500',
+    borderRadius: 10,
+    overflow: 'hidden',
+    marginBottom: 20,
+    backgroundColor: '#1c1c1c',
   },
   input: {
-    width: 350,
-    height: 40,
-    borderColor: '#000',
-    borderWidth: 1,
-    padding: 10,
+    flex: 1,
+    height: 45,
+    paddingHorizontal: 10,
+    fontSize: 16,
+    color: '#fff',
   },
   botao: {
-    backgroundColor: '#222',
-    height: 40,
+    backgroundColor: '#FFA500',
+    paddingHorizontal: 15,
     justifyContent: 'center',
-    padding: 10,
-    marginLeft: 3,
   },
-  nome: {
-    marginTop: 15,
-    fontSize: 30,
-    textAlign: 'center',
+  botaoTexto: {
+    color: '#111',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  lista: {
+    width: '100%',
+  },
+  itemContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#222',
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 10,
+  },
+  itemTexto: {
+    flex: 1,
+    fontSize: 16,
+    color: '#fff',
+    fontFamily: 'cursive',
+  },
+  itemConcluida: {
+    textDecorationLine: 'line-through',
+    color: '#aaa',
+    opacity: 0.7,
+  },
+  icon: {
+    marginHorizontal: 6,
+  },
+  sharinganIcon: {
+    width: 24,
+    height: 24,
+    marginHorizontal: 6,
+  },
+  modalContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    backgroundColor: '#000000aa',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: '#1a1a1a',
+    borderRadius: 10,
+    padding: 20,
+    borderWidth: 2,
+    borderColor: '#FF4444',
+  },
+  modalTitle: {
+    fontSize: 18,
+    color: '#fff',
+    marginBottom: 10,
+  },
+  modalInput: {
+    borderWidth: 1,
+    borderColor: '#FFA500',
+    padding: 10,
+    borderRadius: 5,
+    color: '#fff',
+    marginBottom: 10,
+  },
+  salvarBotao: {
+    backgroundColor: '#FF4444',
+    padding: 10,
+    borderRadius: 5,
+    alignItems: 'center',
+  },
+  salvarTexto: {
+    color: '#fff',
+    fontWeight: 'bold',
   },
 });
+
+export default App;
